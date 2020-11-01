@@ -63,8 +63,7 @@ class Partner(commands.Cog):
                 if not member:
                     continue
                 
-                await self.data.member(member).weekly_points.set(0)
-                await self.data.member(member).points.set(0)
+                await self.data.clear_all_members(ctx.guild)
                 n+=1
             return await ctx.send(f"Successfully reset the points for **{n}** members.")
         await ctx.send("There is no data to reset!")

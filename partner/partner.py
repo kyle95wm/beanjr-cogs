@@ -52,6 +52,24 @@ class Partner(commands.Cog):
             pass
 
     @checks.admin()
+    @partner.command(name="reset")
+    async def _reset(self, ctx):
+        """Reset alltime or weekly leaderboard."""
+        data = await self.data.all_members(ctx.guild)
+        n=0
+        if data:
+            for member_id in data:
+                member = ctx.guild.get_member(int(member_id))
+                if not member:
+                    continue
+                
+                await self.data.member(member).weekly_points.set(0)
+                await self.data.member(member).points.set(0)
+                n+=1
+            return await ctx.send(f"Successfully reset the points for **{n}** members.")
+        await ctx.send("There is no data to reset!")
+
+    @checks.admin()
     @partner.command(name="channel")
     async def _channel(self, ctx, channel: discord.TextChannel=None):
         """Specify a channel for partnerships."""
@@ -62,6 +80,7 @@ class Partner(commands.Cog):
         else:
             await self.data.guild(ctx.guild).channel.set(None)
             await ctx.send(f"Reset the partner channel!")
+
 
     @partner.command(name="weekly")    
     async def _weekly(self, ctx):

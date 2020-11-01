@@ -2,7 +2,7 @@ import discord
 from redbot.core import commands, Config, checks
 from redbot.core.bot import Red
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 import asyncio
 
 class Partner(commands.Cog):
@@ -27,7 +27,7 @@ class Partner(commands.Cog):
         while True:
             await asyncio.sleep(5)
             now = datetime.utcnow()
-            if datetime.isoweekday() == 7 and now.hour == 0 and now.minute == 0:
+            if now.isoweekday() == 7 and now.hour == 0 and now.minute == 0:
                 for guild_id in (data:= await self.data.all_guilds()):
                     guild = self.bot.get_guild(int(guild_id))
 
@@ -120,9 +120,9 @@ class Partner(commands.Cog):
 
         if partner_channel != message.channel.id:
             return 
-
-        reinvite = re.compile("(?:[\/s \/S]|)*(?:https?:\/\/)?(?:www.)?(?:discord.gg|(?:canary.)?discordapp.com\/invite)\/((?:[a-zA-Z0-9]){2,32})(?:[\/s \/S]|)*", re.IGNORECASE)
-        if not reinvite.match(message.content):
+        
+        reinvite = r"(?:[\/s \/S]|)*(?:https?:\/\/)?(?:www.)?(?:discord.gg|(?:canary.)?discordapp.com\/invite)\/((?:[a-zA-Z0-9]){2,32})(?:[\/s \/S]|)*"
+        if not re.search(reinvite, message.content, re.IGNORECASE):
             return
         
         data = await self.data.member(message.author).weekly_points()

@@ -154,7 +154,7 @@ class Partner(commands.Cog):
             em.add_field(name="Weekly :", value=f"{data[member.id]['weekly_points']}")
             em.add_field(name="All-Time :", value=f"{data[member.id]['points']}")
         except KeyError:
-            em = discord.Embed(description="Either the partner channel isn't set either you or the user don't have any data.")
+            em = discord.Embed(description="No stats available for you or the user provided.")
             return await ctx.send(embed=em)
         return await ctx.send(embed=em)
 

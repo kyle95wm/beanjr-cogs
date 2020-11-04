@@ -22,7 +22,13 @@ class Partner(commands.Cog):
 
     def cog_unload(self):
         self.loop.cancel()
-         
+       
+    def days_before_reset(self):
+        now = datetime.utcnow().weekday()
+        _next = 6
+        _next = str(_next - now)
+        return _next
+
     async def weekly_reset(self):
         while True:
             await asyncio.sleep(5)
@@ -99,7 +105,10 @@ class Partner(commands.Cog):
 
             if n == 11:
                 break
-        embed=discord.Embed(title="Weekly Partner leaderboard", description=message, color=ctx.author.color)
+        embed=discord.Embed(title="Weekly Partner Leaderboard", description=message, color=discord.Colour(await ctx.bot._config.color()))
+        embed.set_author(name=ctx.guild, icon_url=ctx.guild.icon_url)
+        embed.set_thumbnail(url=ctx.guild.icon_url)
+        embed.set_footer(text=f"Next weekly reset in: {self.days_before_reset()} days")
         await ctx.send(embed=embed)
 
     @partner.command(name="alltime", aliases=["all"])    
@@ -120,8 +129,34 @@ class Partner(commands.Cog):
 
             if n == 11:
                 break
-        embed=discord.Embed(title="Alltime Partner leaderboard", description=message, color=ctx.author.color)
+        embed=discord.Embed(title="Alltime Partner Leaderboard", description=message, color=discord.Colour(await ctx.bot._config.color()))
+        embed.set_author(name=ctx.guild, icon_url=ctx.guild.icon_url)
+        embed.set_thumbnail(url=ctx.guild.icon_url)
+        embed.set_footer(text="Top 10 alltime partners")
         await ctx.send(embed=embed)
+
+    @partner.command(name="stats")
+    async def _stats(self, ctx, member: discord.Member = None):
+        """View a member stats or your owns"""
+        if member is None:
+            member = ctx.author
+        
+        if member.bot:
+            em = discord.Embed(description="Bots can't be tracked.")
+            return await ctx.send(embed=em)
+
+        data = await self.data.all_members(ctx.guild)
+        em = discord.Embed(colour=discord.Colour(await ctx.bot._config.color()))
+        try:
+            em.set_author(name=member.name, icon_url=member.avatar_url)
+            em.set_thumbnail(url=member.avatar_url)
+            em.set_footer(text=f"Next weekly reset in: {self.days_before_reset()} days")
+            em.add_field(name="Weekly :", value=f"{data[member.id]['weekly_points']}")
+            em.add_field(name="All-Time :", value=f"{data[member.id]['points']}")
+        except KeyError:
+            em = discord.Embed(description="Either the partner channel isn't set either you or the user don't have any data.")
+            return await ctx.send(embed=em)
+        return await ctx.send(embed=em)
 
     @commands.Cog.listener()
     async def on_message(self, message):

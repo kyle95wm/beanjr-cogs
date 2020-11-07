@@ -58,20 +58,44 @@ class Partner(commands.Cog):
             pass
 
     @checks.admin()
+    @partner.command(name="addpoint", aliases=["apoint"])
+    async def _addpoint(self, ctx, user: discord.Member, point: int):
+        """Add a partner point to the user."""
+        data = await self.data.member(user).weekly_points()
+        data2 = await self.data.member(user).points()
+        await self.data.member(user).weekly_points.set(data+point)
+        await self.data.member(user).points.set(data2+point)
+        await ctx.send(f"Added {point} partner points to {user.mention}.")
+        
+    @checks.admin()
+    @partner.command(name="removepoint", aliases=["rpoint"])
+    async def _removepoint(self, ctx, user: discord.Member, point: int):
+        """Remove a partner point to the user."""
+        data = await self.data.member(user).weekly_points()
+        data2 = await self.data.member(user).points()
+        if data and data < point:
+            point = data
+            await self.data.member(user).weekly_points.set(0)
+        else:
+            await self.data.member(user).weekly_points.set(data-point)
+            
+        if data2 and data2 < point:
+            point = data
+            await self.data.member(user).points.set(0)
+        else:
+            await self.data.member(user).points.set(data2-point)
+            
+        await ctx.send(f"Removed {point} partner points to {user.mention}.")
+        
+        
+    @checks.admin()
     @partner.command(name="reset")
     async def _reset(self, ctx):
         """Reset alltime or weekly leaderboard."""
         data = await self.data.all_members(ctx.guild)
-        n=0
         if data:
-            for member_id in data:
-                member = ctx.guild.get_member(int(member_id))
-                if not member:
-                    continue
-                
-                await self.data.clear_all_members(ctx.guild)
-                n+=1
-            return await ctx.send(f"Successfully reset the points for **{n}** members.")
+            await self.data.clear_all_members(ctx.guild)
+            return await ctx.send(f"Successfully reset the points for all the members.")
         await ctx.send("There is no data to reset!")
 
     @checks.admin()
@@ -94,7 +118,6 @@ class Partner(commands.Cog):
         if not data:
             return await ctx.send("There is nothing to see here.")
         sorted_data = sorted(data, key=lambda x: data[x]["weekly_points"], reverse=True)
-        author_rank = 0
         message = ""
         n = 1
         for rank in sorted_data:
@@ -118,7 +141,6 @@ class Partner(commands.Cog):
         if not data:
             return await ctx.send("There is nothing to see here.")
         sorted_data = sorted(data, key=lambda x: data[x]["points"], reverse=True)
-        author_rank = 0
         message = ""
         n = 1
         for rank in sorted_data:
@@ -145,16 +167,17 @@ class Partner(commands.Cog):
             em = discord.Embed(description="Bots can't be tracked.")
             return await ctx.send(embed=em)
 
-        data = await self.data.all_members(ctx.guild)
+        data = await self.data.member(member).weekly_points()
+        data2 = await self.data.member(member).points()
         em = discord.Embed(colour=discord.Colour(await ctx.bot._config.color()))
-        try:
+        if data and data2:
             em.set_author(name=member.name, icon_url=member.avatar_url)
             em.set_thumbnail(url=member.avatar_url)
             em.set_footer(text=f"Next weekly reset in: {self.days_before_reset()} days")
-            em.add_field(name="Weekly :", value=f"{data[member.id]['weekly_points']}")
-            em.add_field(name="All-Time :", value=f"{data[member.id]['points']}")
-        except KeyError:
-            em = discord.Embed(description="No stats available for you or the user provided.")
+            em.add_field(name="Weekly :", value=data)
+            em.add_field(name="All-Time :", value=data2)
+        else:
+            em = discord.Embed(description="Either the partner channel isn't set either you or the user don't have any data.")
             return await ctx.send(embed=em)
         return await ctx.send(embed=em)
 

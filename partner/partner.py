@@ -34,21 +34,19 @@ class Partner(commands.Cog):
             await asyncio.sleep(5)
             now = datetime.utcnow()
             if now.isoweekday() == 7 and now.hour == 0 and now.minute == 0:
-                for guild_id in (data:= await self.data.all_guilds()):
+                for guild_id in await self.data.all_guilds():
                     guild = self.bot.get_guild(int(guild_id))
 
                     if not guild:
                         continue
  
-                    all_members = await self.data.all_members(guild)
-
-                    if all_members:
-                        for member_id in all_members:
-                            member = guild.get_member(int(member_id))
-                            if not member:
-                                continue
-
-                            await self.data.member(member).weekly_points.set(0)
+                    data = await self.data.all_members(guild)
+                    if data:
+                        try:
+                            await self.data.clear_all_members(guild)
+                            print("Successfully performed the weekly reset.")
+                        except:
+                            print("Error while trying to weekly reset. Please contact devs.")
                            
     @commands.guild_only()
     @commands.group()

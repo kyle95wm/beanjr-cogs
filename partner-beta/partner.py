@@ -4,54 +4,50 @@ from redbot.core.bot import Red
 import re
 from datetime import datetime
 import asyncio
+from discord.ext import tasks
+
 
 class Partner(commands.Cog):
     def __init__(self, bot: Red):
         self.bot = bot
-        self.data = Config.get_conf(self, identifier=3467369396939, force_registration=True)
-        default_member = {
-            "weekly_points": 0,
-            "points": 0
-        }
-        default_guild = {
-            "channel": None
-        }
+        self.data = Config.get_conf(
+            self, identifier=3467369396939, force_registration=True
+        )
+        default_member = {"weekly_points": 0, "points": 0}
+        default_guild = {"channel": None}
         self.data.register_member(**default_member)
         self.data.register_guild(**default_guild)
-        self.loop = bot.loop.create_task(self.weekly_reset())
+        self.weekly_reset.start()
 
     def cog_unload(self):
-        self.loop.cancel()
-       
+        self.weekly_reset.cancel()
+
     def days_before_reset(self):
         now = datetime.utcnow().weekday()
         _next = 6
         _next = str(_next - now)
         return _next
 
+    @tasks.loop(seconds=60)
     async def weekly_reset(self):
-        while True:
-            await asyncio.sleep(5)
-            now = datetime.utcnow()
-            if now.isoweekday() == 4 and now.hour == 7 and now.minute == 30:
-                for guild_id in await self.data.all_guilds():
-                    guild = self.bot.get_guild(int(guild_id))
+        now = datetime.utcnow()
+        if now.isoweekday() == 7 and now.hour == 0 and now.minute == 0:
+            for guild in await self.data.all_members():
+                guild = self.bot.get_guild(int(guild))
 
-                    if not guild:
+                if not guild:
+                    continue
+
+                for member in await self.data.all_members(guild):
+                    member = guild.get_member(member)
+
+                    if not member:
                         continue
- 
-                        for member in await self.data.all_members(guild):
-                            member = guild.get_member(int(member))
-                        
-                            if not member:
-                                continue
-                            else:
-                                try:
-                                    await self.data.member(member).weekly_points.set(0)
-                                    print("Successfully performed the weekly reset. ")
-                                except:
-                                    print("Error while trying to weekly reset. Please contact the devs. ")
-                           
+
+                    await self.data.member(member).weekly_points.set(0)
+
+            print("Successfully weekly reset")
+
     @commands.guild_only()
     @commands.group()
     async def partner(self, ctx):
@@ -65,10 +61,10 @@ class Partner(commands.Cog):
         """Add a partner point to the user."""
         data = await self.data.member(user).weekly_points()
         data2 = await self.data.member(user).points()
-        await self.data.member(user).weekly_points.set(data+point)
-        await self.data.member(user).points.set(data2+point)
+        await self.data.member(user).weekly_points.set(data + point)
+        await self.data.member(user).points.set(data2 + point)
         await ctx.send(f"Added {point} partner points to {user.mention}.")
-        
+
     @checks.admin()
     @partner.command(name="removepoint", aliases=["rpoint"])
     async def _removepoint(self, ctx, user: discord.Member, point: int):
@@ -79,17 +75,16 @@ class Partner(commands.Cog):
             point = data
             await self.data.member(user).weekly_points.set(0)
         else:
-            await self.data.member(user).weekly_points.set(data-point)
-            
+            await self.data.member(user).weekly_points.set(data - point)
+
         if data2 and data2 < point:
             point = data
             await self.data.member(user).points.set(0)
         else:
-            await self.data.member(user).points.set(data2-point)
-            
+            await self.data.member(user).points.set(data2 - point)
+
         await ctx.send(f"Removed {point} partner points to {user.mention}.")
-        
-        
+
     @checks.admin()
     @partner.command(name="reset")
     async def _reset(self, ctx):
@@ -102,7 +97,7 @@ class Partner(commands.Cog):
 
     @checks.admin()
     @partner.command(name="channel")
-    async def _channel(self, ctx, channel: discord.TextChannel=None):
+    async def _channel(self, ctx, channel: discord.TextChannel = None):
         """Specify a channel for partnerships."""
         channel = None if not channel else channel
         if channel:
@@ -112,8 +107,7 @@ class Partner(commands.Cog):
             await self.data.guild(ctx.guild).channel.set(None)
             await ctx.send(f"Reset the partner channel!")
 
-
-    @partner.command(name="weekly")    
+    @partner.command(name="weekly")
     async def _weekly(self, ctx):
         """ View weekly leaderboard for partnerships."""
         data = await self.data.all_members(ctx.guild)
@@ -124,19 +118,23 @@ class Partner(commands.Cog):
         n = 1
         for rank in sorted_data:
             member = ctx.guild.get_member(rank)
-            if member:
+            if member and data[member.id]["weekly_points"] > 0:
                 message += f"{n}. ``{member}`` - **{data[member.id]['weekly_points']}** points\n"
-                n+=1 
+                n += 1
 
-            if n == 11:
+            if n > 10:
                 break
-        embed=discord.Embed(title="Weekly Partner Leaderboard", description=message, color=discord.Colour(await ctx.bot._config.color()))
+        embed = discord.Embed(
+            title="Weekly Partner Leaderboard",
+            description=message,
+            color=discord.Colour(await ctx.bot._config.color()),
+        )
         embed.set_author(name=ctx.guild, icon_url=ctx.guild.icon_url)
         embed.set_thumbnail(url=ctx.guild.icon_url)
         embed.set_footer(text=f"Next weekly reset in: {self.days_before_reset()} days")
         await ctx.send(embed=embed)
 
-    @partner.command(name="alltime", aliases=["all"])    
+    @partner.command(name="alltime", aliases=["all"])
     async def _all(self, ctx):
         """ View All time leaderboard for partnerships."""
         data = await self.data.all_members(ctx.guild)
@@ -148,12 +146,18 @@ class Partner(commands.Cog):
         for rank in sorted_data:
             member = ctx.guild.get_member(rank)
             if member:
-                message += f"{n}. ``{member}`` - **{data[member.id]['points']}** points\n"
-                n+=1 
+                message += (
+                    f"{n}. ``{member}`` - **{data[member.id]['points']}** points\n"
+                )
+                n += 1
 
             if n == 11:
                 break
-        embed=discord.Embed(title="Alltime Partner Leaderboard", description=message, color=discord.Colour(await ctx.bot._config.color()))
+        embed = discord.Embed(
+            title="Alltime Partner Leaderboard",
+            description=message,
+            color=discord.Colour(await ctx.bot._config.color()),
+        )
         embed.set_author(name=ctx.guild, icon_url=ctx.guild.icon_url)
         embed.set_thumbnail(url=ctx.guild.icon_url)
         embed.set_footer(text="Top 10 alltime partners")
@@ -164,30 +168,33 @@ class Partner(commands.Cog):
         """View a member stats or your owns"""
         if member is None:
             member = ctx.author
-        
+
         if member.bot:
             em = discord.Embed(description="Bots can't be tracked.")
             return await ctx.send(embed=em)
 
         data = await self.data.member(member).weekly_points()
         data2 = await self.data.member(member).points()
-        em = discord.Embed(colour=discord.Colour(await ctx.bot._config.color()))
-        if data and data2:
-            em.set_author(name=member.name, icon_url=member.avatar_url)
-            em.set_thumbnail(url=member.avatar_url)
-            em.set_footer(text=f"Next weekly reset in: {self.days_before_reset()} days")
-            em.add_field(name="Weekly :", value=data)
-            em.add_field(name="All-Time :", value=data2)
-        else:
-            em = discord.Embed(description="Either the partner channel isn't set either you or the user don't have any data.")
+        if not data and not data2:
+            em = discord.Embed(
+                description="Either the partner channel isn't set either you or the user don't have any data."
+            )
             return await ctx.send(embed=em)
+
+        em = discord.Embed(colour=discord.Colour(await ctx.bot._config.color()))
+        em.set_author(name=member.name, icon_url=member.avatar_url)
+        em.set_thumbnail(url=member.avatar_url)
+        em.set_footer(text=f"Next weekly reset in: {self.days_before_reset()} days")
+        if data != 0:
+            em.add_field(name="Weekly :", value=data)
+        em.add_field(name="All-Time :", value=data2)
         return await ctx.send(embed=em)
 
     @commands.Cog.listener()
     async def on_message(self, message):
         guild = message.guild
         if message.author.bot:
-            return 
+            return
 
         if not guild:
             return
@@ -197,13 +204,13 @@ class Partner(commands.Cog):
             return
 
         if partner_channel != message.channel.id:
-            return 
-        
+            return
+
         reinvite = r"(?:[\/s \/S]|)*(?:https?:\/\/)?(?:www.)?(?:discord.gg|(?:canary.)?discordapp.com\/invite)\/((?:[a-zA-Z0-9]){2,32})(?:[\/s \/S]|)*"
         if not re.search(reinvite, message.content, re.IGNORECASE):
             return
-        
+
         data = await self.data.member(message.author).weekly_points()
-        await self.data.member(message.author).weekly_points.set(data+1)
+        await self.data.member(message.author).weekly_points.set(data + 1)
         data = await self.data.member(message.author).points()
-        await self.data.member(message.author).points.set(data+1)
+        await self.data.member(message.author).points.set(data + 1)
